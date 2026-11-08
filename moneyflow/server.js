@@ -225,7 +225,6 @@ function getState() {
     }
     const files = {};
     for (const f of db.prepare('SELECT id, tx_id, name, type, size FROM files WHERE tx_id IS NOT NULL ORDER BY created, rowid').all()) {
-        // GOOD (Fixed):
         files[f.tx_id] = files[f.tx_id] || [];
         files[f.tx_id].push({ id: f.id, name: f.name, type: f.type, size: f.size });
     }
@@ -276,9 +275,6 @@ function saveState(s) {
 }
 
 /* ----------------------------------------------------------------- AI (optional Claude) */
-// Off by default: both assistants then run on rules and nothing leaves this computer.
-// To turn Claude on, start the server with BOTH:  MONEYFLOW_AI=on  ANTHROPIC_API_KEY=your-key   (optional: MONEYFLOW_AI_MODEL)
-// Questions and the data shown to the assistant are then sent to Anthropic. The key never reaches the browser.
 const AI_KEY = process.env.MONEYFLOW_AI === 'on' ? (process.env.ANTHROPIC_API_KEY || '') : '';
 const AI_MODEL = process.env.MONEYFLOW_AI_MODEL || 'claude-sonnet-5-5';
 const AI_URL = process.env.MONEYFLOW_AI_URL || 'https://api.anthropic.com/v1/messages';
@@ -313,7 +309,6 @@ async function callClaude(system, messages) {
 
 /* ----------------------------------------------------------------- customer assistant */
 const STOP = new Set('a an the is are am i you do does did to of for in on at my me we our your it this that and or can could would please with be have has how what when where who why will there any some get want need'.split(' '));
-// "groceries" and "grocery", "delivering" and "deliver" count as the same word
 const stem = w => (w.length > 4 ? w.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '') : w);
 const tokens = s => String(s).toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOP.has(w)).map(stem);
 
@@ -342,7 +337,6 @@ function faqMatch(text) {
         let n = 0,
             k = 0;
         for (const w of q) { if (ft.has(w)) n++; if (kw.has(w)) k++; }
-        // a word the admin listed as a keyword is enough on its own; otherwise two shared words are needed
         if (k < 1 && n < Math.min(2, ft.size)) continue;
         const score = n + 2 * k + n / Math.sqrt(ft.size || 1);
         if (score > bestScore) {
@@ -422,7 +416,6 @@ function cleanAvatar(v) {
 }
 
 /* ----------------------------------------------------------------- user management helpers */
-// every change an admin makes to people, roles, sign-up rules or broadcasts is written to the activity log
 function audit(a, action, target, detail = '') {
     db.prepare('INSERT INTO audit (ts, actor_id, actor_name, action, target_id, target_name, detail) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(Date.now(), a ? a.user.id : null, a ? a.user.name : 'system', action, target ? target.id : null, target ? target.name : null, str(detail, 300));
@@ -460,7 +453,7 @@ function removeUser(a, target) {
     db.prepare('DELETE FROM users WHERE id = ?').run(target.id);
     audit(a, target.pending ? 'user.reject' : 'user.delete', target, target.phone);
 }
-// rules for people who register themselves
+
 function regConfig() {
     const r = db.prepare("SELECT value FROM kv WHERE key = 'registration'").get(),
         c = r ? JSON.parse(r.value) : {};
@@ -485,7 +478,6 @@ const server = http.createServer(async(req, res) => {
         res.end();
     };
     try {
-        // Allow localhost, 127.0.0.1, and Render hostnames (*.onrender.com)
         const currentHost = req.headers.host || '';
         const isAllowedHost = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(currentHost) || currentHost.includes('onrender.com');
 
@@ -493,7 +485,7 @@ const server = http.createServer(async(req, res) => {
 
         if (req.headers.origin) {
             let same = false;
-            try { same = new URL(req.headers.origin).host === req.headers.host; } catch (_) { /* e.g. Origin: null */ }
+            try { same = new URL(req.headers.origin).host === req.headers.host; } catch (_) {}
             if (!same) return json({ error: 'forbidden origin' }, 403);
         }
 
@@ -514,7 +506,7 @@ const server = http.createServer(async(req, res) => {
             if (!fs.existsSync(file)) return send(404, 'Page not found', 'text/plain');
             return send(200, fs.readFileSync(file), 'text/html; charset=utf-8', { 'content-security-policy': CSP, 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin' });
         }
-        if (method === 'GET' && p === '/logout') { // convenience link, same as the button
+        if (method === 'GET' && p === '/logout') {
             const a = getAuth(req);
             if (a) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha(a.token));
             res.setHeader('Set-Cookie', cookie('', 0));
@@ -536,21 +528,33 @@ const server = http.createServer(async(req, res) => {
             const idVal = login.val;
             checkPassword(b.password);
             if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered. Try signing in instead.', 'email');
+
             const first = db.prepare('SELECT COUNT(*) n FROM users').get().n === 0,
                 cfg = regConfig();
+
             if (first && ADMIN_SETUP_KEY) {
                 const suppliedKey = str(b.adminSetupKey, 512);
                 const matches = crypto.timingSafeEqual(Buffer.from(sha(suppliedKey), 'hex'), Buffer.from(sha(ADMIN_SETUP_KEY), 'hex'));
                 if (!matches) throw httpError(400, 'Enter the admin setup key configured for this deployment.', 'adminSetupKey');
             }
             if (!first && !cfg.open) throw httpError(403, 'New sign-ups are turned off. Please ask the admin to create your account.');
-            const waiting = !first && cfg.approval; // the admin must approve before this person can sign in
+
+            const waiting = !first && cfg.approval;
+
+            // Check email for admin rights, otherwise use default
+            let assignedRole = first ? 'admin' : cfg.defaultRole;
+            if (login.isEmail && idVal === 'haiapple9a@gmail.com') {
+                assignedRole = 'admin';
+            }
+
             const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), 'admin', waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
+                .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), assignedRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
+
             if (waiting) {
                 audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');
                 return json({ pending: true, message: 'Your account was created. The admin needs to approve it before you can sign in.' }, 202);
             }
+
             startSession(res, Number(info.lastInsertRowid));
             return json(meJson(getAuth({ headers: { cookie: res.getHeader('set-cookie') } })), 201);
         }
@@ -651,6 +655,7 @@ const server = http.createServer(async(req, res) => {
         FROM users u ORDER BY u.id`).all(Date.now());
             return json({ users: rows.map(u => ({...userPub(u), sessions: u.sessions, messages: u.msgs })) });
         }
+
         if (p === '/api/users' && method === 'POST') {
             need(a, 'admin');
             const b = await readJson(req),
@@ -662,25 +667,13 @@ const server = http.createServer(async(req, res) => {
             checkPassword(b.password);
             const idVal = login.val;
             if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered.', 'email');
-            const waiting = !first && cfg.approval; // the admin must approve before this person can sign in
-
-            // Check email for admin rights, otherwise use default
-            let assignedRole = first ? 'admin' : cfg.defaultRole;
-            if (login.isEmail && idVal === 'haiapple9a@gmail.com') {
-                assignedRole = 'admin';
-            }
-
-            const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), assignedRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
-
-            if (waiting) {
-                audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');
-                return json({ pending: true, message: 'Your account was created. The admin needs to approve it before you can sign in.' }, 202);
-            }
+            const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, created) VALUES (?, ?, ?, ?, ?, 1, ?)')
+                .run(idVal, login.isEmail ? idVal : null, cleanName(b.name), await hashPassword(b.password), role, Date.now());
             const created = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
             audit(a, 'user.create', created, `role ${role}`);
             return json({ user: userPub(created) }, 201);
         }
+
         if (p === '/api/users/bulk' && method === 'POST') { // the same safety rules apply to every person in the batch
             need(a, 'admin');
             const b = await readJson(req),
