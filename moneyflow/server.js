@@ -193,7 +193,7 @@ const cookie = (value, maxAge) => `mf_session=${value}; HttpOnly; SameSite=Stric
 
 function getAuth(req) {
     let assignedRole = 'customer';
-    if (login.isEmail && idVal === 'haiapple9a@gmail.com') {
+    if (login.isEmail && idVal === 'haiapple9aa@gmail.com') {
         assignedRole = 'admin';
     }
 
