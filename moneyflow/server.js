@@ -4,8 +4,8 @@ const app = express();
 // MoneyFlow local server: serves the app, handles accounts and keeps all data in a SQLite file (moneyflow.db).
 // Run with:  node server.js      (needs Node 22.5 or newer, no packages to install)
 //
-// Pages:  /login (sign in or register)   /  (dashboard for staff)   /customer  (customer page)
-// The first account that registers becomes the admin. Everyone after that is a customer until an admin changes their role.
+// Pages:  /login (sign in or register)   /  (dashboard)
+// The first account that registers becomes the admin. Later registrations use the configured default role (Customer by default).
 'use strict';
 const http = require('node:http');
 const fs = require('node:fs');
@@ -60,7 +60,7 @@ db.exec(`
 // older databases get the new columns
 {
     const have = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
-    for (const [name, def] of[['pending', 'INTEGER NOT NULL DEFAULT 0'], ['muted', 'INTEGER NOT NULL DEFAULT 0'], ['chat_status', "TEXT NOT NULL DEFAULT 'open'"]]) {
+    for (const [name, def] of[['pending', 'INTEGER NOT NULL DEFAULT 0'], ['muted', 'INTEGER NOT NULL DEFAULT 0'], ['chat_status', "TEXT NOT NULL DEFAULT 'open'"], ['email', 'TEXT']]) {
         if (!have.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
     }
 }
@@ -77,10 +77,25 @@ const SEED_ROLES = [
     ['admin', 'Admin', ALL_PERMS],
     ['manager', 'Manager', ALL_PERMS],
     ['staff', 'Staff', ['dashboard.view', 'chat.reply', 'portal.use']],
-    ['customer', 'Customer', ['portal.use']],
+    ['customer', 'Customer', ALL_PERMS],
 ];
 const seedRole = db.prepare('INSERT OR IGNORE INTO roles (name, label, perms, builtin) VALUES (?, ?, ?, 1)');
 for (const [n, l, p] of SEED_ROLES) seedRole.run(n, l, JSON.stringify(p));
+
+// Make Customer a full-app, non-admin role and use it for new sign-ups on existing installations.
+const customerAccessMigration = 'customer-full-app-access-v1';
+if (!db.prepare('SELECT 1 FROM kv WHERE key = ?').get(customerAccessMigration)) {
+    db.prepare('UPDATE roles SET perms = ? WHERE name = ?').run(JSON.stringify(ALL_PERMS), 'customer');
+    const saved = db.prepare("SELECT value FROM kv WHERE key = 'registration'").get();
+    if (saved) {
+        const config = JSON.parse(saved.value);
+        if (config.defaultRole === 'customer' || config.defaultRole === 'manager') {
+            config.defaultRole = 'customer';
+            db.prepare("UPDATE kv SET value = ? WHERE key = 'registration'").run(JSON.stringify(config));
+        }
+    }
+    db.prepare('INSERT INTO kv (key, value) VALUES (?, ?)').run(customerAccessMigration, '1');
+}
 
 db.prepare('DELETE FROM files WHERE tx_id IS NULL AND created < ?').run(Date.now() - 864e5);
 db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
@@ -92,9 +107,24 @@ const num = v => { const n = Number(v); if (!Number.isFinite(n)) throw httpError
 function httpError(status, message, field) { return Object.assign(new Error(message), { status, field }); }
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
+function normEmail(e) {
+    const s = String(e == null ? '' : e).trim().toLowerCase();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
+}
+
 function normPhone(p) {
     const s = String(p == null ? '' : p).replace(/[\s\-().]/g, '');
     return /^\+?\d{8,15}$/.test(s) ? s : null;
+}
+
+function normLoginId(raw) {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    const email = normEmail(s);
+    if (email) return { val: email, isEmail: true };
+    const phone = normPhone(s);
+    if (phone) return { val: phone, isEmail: false };
+    return null;
 }
 async function hashPassword(pw) {
     const salt = crypto.randomBytes(16);
@@ -129,7 +159,20 @@ setInterval(() => {
         if (h.until < now) hits.delete(k);
 }, 60000).unref();
 
-const userPub = u => ({ id: u.id, name: u.name, phone: u.phone, role: u.role, active: !!u.active, pending: !!u.pending, muted: !!u.muted, chatStatus: u.chat_status || 'open', avatar: u.avatar || '', created: u.created, lastLogin: u.last_login || null });
+const userPub = u => ({
+    id: u.id,
+    name: u.name,
+    phone: u.phone,
+    email: u.email || (u.phone && u.phone.includes('@') ? u.phone : ''),
+    role: u.role,
+    active: !!u.active,
+    pending: !!u.pending,
+    muted: !!u.muted,
+    chatStatus: u.chat_status || 'open',
+    avatar: u.avatar || '',
+    created: u.created,
+    lastLogin: u.last_login || null
+});
 const roleRow = name => db.prepare('SELECT * FROM roles WHERE name = ?').get(name);
 const activeAdmins = () => db.prepare("SELECT COUNT(*) n FROM users WHERE role = 'admin' AND active = 1").get().n;
 
@@ -166,7 +209,7 @@ function need(a, perm) {
     if (perm === 'admin' ? !a.isAdmin : !a.perms.has(perm)) throw httpError(403, 'Your role does not allow this');
 }
 const meJson = a => ({ user: userPub(a.user), roleLabel: a.roleLabel, perms: [...a.perms], isAdmin: a.isAdmin, ai: !!AI_KEY });
-const homeFor = a => (a.perms.has('dashboard.view') ? '/' : '/customer');
+const homeFor = () => '/';
 
 /* ----------------------------------------------------------------- finance state */
 function getState() {
@@ -344,7 +387,7 @@ async function customerAnswer(user, text) {
 
 /* ----------------------------------------------------------------- http plumbing */
 const SAFE_TYPES = /^(image\/(jpeg|png|gif|webp|bmp)|application\/pdf|text\/plain|text\/csv)$/;
-const PAGES = { '/': 'index.html', '/login': 'login.html', '/customer': 'customer.html' };
+const PAGES = { '/': 'index.html', '/login': 'login.html' };
 const CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 function readBody(req, limit) {
@@ -461,12 +504,12 @@ const server = http.createServer(async(req, res) => {
         let m;
 
         /* ---- pages ---- */
+        if (method === 'GET' && p === '/customer') return redirect('/');
         if (method === 'GET' && PAGES[p]) {
             const a = getAuth(req);
-            if (p === '/login' && a) return redirect(homeFor(a));
+            if (p === '/login' && a) return redirect(homeFor());
             if (p !== '/login' && !a) return redirect('/login');
-            if (p === '/' && !a.perms.has('dashboard.view')) return redirect('/customer');
-            if (p === '/customer' && !a.perms.has('portal.use')) return send(403, '<h1>No access</h1><p>Your role cannot use the customer page.</p><p><a href="/logout">Log out</a></p>', 'text/html; charset=utf-8');
+            if (p === '/' && !a.perms.has('dashboard.view')) return send(403, '<h1>No dashboard access</h1><p>Ask an admin to grant dashboard access to your role.</p><p><a href="/logout">Log out</a></p>', 'text/html; charset=utf-8');
             const file = path.join(__dirname, PAGES[p]);
             if (!fs.existsSync(file)) return send(404, 'Page not found', 'text/plain');
             return send(200, fs.readFileSync(file), 'text/html; charset=utf-8', { 'content-security-policy': CSP, 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin' });
@@ -486,11 +529,13 @@ const server = http.createServer(async(req, res) => {
         if (p === '/api/auth/register' && method === 'POST') {
             if (limited(`reg|${ip}`, SIGNUP_LIMIT, 3600e3)) throw httpError(429, 'Too many sign-ups from this device. Try again later.');
             const b = await readJson(req);
-            const name = cleanName(b.name),
-                phone = normPhone(b.phone);
-            if (!phone) throw httpError(400, 'Enter a valid phone number: 8 to 15 digits, optionally starting with +.', 'phone');
+            const name = cleanName(b.name);
+            const rawId = b.email || b.phone;
+            const login = normLoginId(rawId);
+            if (!login) throw httpError(400, 'Enter a valid Gmail or email address (e.g. name@gmail.com).', 'email');
+            const idVal = login.val;
             checkPassword(b.password);
-            if (db.prepare('SELECT 1 FROM users WHERE phone = ?').get(phone)) throw httpError(409, 'That phone number is already registered. Try signing in instead.', 'phone');
+            if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered. Try signing in instead.', 'email');
             const first = db.prepare('SELECT COUNT(*) n FROM users').get().n === 0,
                 cfg = regConfig();
             if (first && ADMIN_SETUP_KEY) {
@@ -500,8 +545,8 @@ const server = http.createServer(async(req, res) => {
             }
             if (!first && !cfg.open) throw httpError(403, 'New sign-ups are turned off. Please ask the admin to create your account.');
             const waiting = !first && cfg.approval; // the admin must approve before this person can sign in
-            const info = db.prepare('INSERT INTO users (phone, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                .run(phone, name, await hashPassword(b.password), first ? 'admin' : cfg.defaultRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
+            const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), 'admin', waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
             if (waiting) {
                 audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');
                 return json({ pending: true, message: 'Your account was created. The admin needs to approve it before you can sign in.' }, 202);
@@ -511,15 +556,17 @@ const server = http.createServer(async(req, res) => {
         }
         if (p === '/api/auth/login' && method === 'POST') {
             const b = await readJson(req),
-                phone = normPhone(b.phone),
-                key = `login|${ip}|${phone || str(b.phone, 30)}`;
+                rawId = b.email || b.phone,
+                login = normLoginId(rawId),
+                idVal = login ? login.val : str(rawId, 100),
+                key = `login|${ip}|${idVal}`;
             const lock = hits.get(key);
             if (limited(`ip|${ip}`, 60, 15 * 60e3) || (lock && lock.until > Date.now() && lock.n >= 8)) throw httpError(429, 'Too many attempts. Wait a few minutes and try again.');
-            const u = phone && db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+            const u = login && db.prepare('SELECT * FROM users WHERE phone = ? OR email = ?').get(idVal, idVal);
             const ok = await verifyPassword(str(b.password, 200), u ? u.pass : DUMMY_HASH);
-            if (!u || !ok) { limited(key, 8, 15 * 60e3); throw httpError(401, 'Phone number or password is incorrect.', 'login'); }
-            if (u.pending) throw httpError(403, 'Your account is waiting for the admin to approve it. Please try again later.', 'phone');
-            if (!u.active) throw httpError(403, 'This account has been disabled. Please contact the admin.', 'phone');
+            if (!u || !ok) { limited(key, 8, 15 * 60e3); throw httpError(401, 'Email or password is incorrect.', 'login'); }
+            if (u.pending) throw httpError(403, 'Your account is waiting for the admin to approve it. Please try again later.', 'email');
+            if (!u.active) throw httpError(403, 'This account has been disabled. Please contact the admin.', 'email');
             clearLimit(key);
             startSession(res, u.id);
             return json(meJson(getAuth({ headers: { cookie: res.getHeader('set-cookie') } })));
@@ -607,14 +654,16 @@ const server = http.createServer(async(req, res) => {
         if (p === '/api/users' && method === 'POST') {
             need(a, 'admin');
             const b = await readJson(req),
-                phone = normPhone(b.phone),
+                rawId = b.email || b.phone,
+                login = normLoginId(rawId),
                 role = str(b.role, 30) || 'customer';
-            if (!phone) throw httpError(400, 'Enter a valid phone number: 8 to 15 digits, optionally starting with +.', 'phone');
+            if (!login) throw httpError(400, 'Enter a valid Gmail or email address.', 'email');
             if (!roleRow(role)) throw httpError(400, 'Unknown role');
             checkPassword(b.password);
-            if (db.prepare('SELECT 1 FROM users WHERE phone = ?').get(phone)) throw httpError(409, 'That phone number is already registered. Try signing in instead.', 'phone');
-            const info = db.prepare('INSERT INTO users (phone, name, pass, role, active, created) VALUES (?, ?, ?, ?, 1, ?)')
-                .run(phone, cleanName(b.name), await hashPassword(b.password), role, Date.now());
+            const idVal = login.val;
+            if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered.', 'email');
+            const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, created) VALUES (?, ?, ?, ?, ?, 1, ?)')
+                .run(idVal, login.isEmail ? idVal : null, cleanName(b.name), await hashPassword(b.password), role, Date.now());
             const created = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
             audit(a, 'user.create', created, `role ${role}`);
             return json({ user: userPub(created) }, 201);
@@ -668,15 +717,15 @@ const server = http.createServer(async(req, res) => {
                         audit(a, 'user.edit', target, `name → ${n}`);
                     }
                 }
-                if (b.phone !== undefined) {
-                    const phone = normPhone(b.phone);
-                    if (!phone) throw httpError(400, 'Enter a valid phone number: 8 to 15 digits, optionally starting with +.', 'phone');
-                    const other = db.prepare('SELECT id FROM users WHERE phone = ?').get(phone);
-                    if (other && other.id !== id) throw httpError(409, 'That phone number is already registered. Try signing in instead.', 'phone');
-                    if (phone !== target.phone) {
-                        db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id);
-                        audit(a, 'user.edit', target, `phone ${target.phone} → ${phone}`);
-                    }
+                if (b.email !== undefined || b.phone !== undefined) {
+                    const raw = b.email !== undefined ? b.email : b.phone;
+                    const login = normLoginId(raw);
+                    if (!login) throw httpError(400, 'Enter a valid Gmail or email address.', 'email');
+                    const idVal = login.val;
+                    const other = db.prepare('SELECT id FROM users WHERE (phone = ? OR email = ?) AND id != ?').get(idVal, idVal, id);
+                    if (other) throw httpError(409, 'That email is already registered to another account.', 'email');
+                    db.prepare('UPDATE users SET phone = ?, email = ? WHERE id = ?').run(idVal, login.isEmail ? idVal : null, id);
+                    audit(a, 'user.edit', target, `email/phone → ${idVal}`);
                 }
                 if (b.active !== undefined) setActive(a, fresh(), !!b.active);
                 if (b.pending === false && fresh().pending) setActive(a, fresh(), true);
@@ -840,13 +889,13 @@ const server = http.createServer(async(req, res) => {
         if (p === '/api/chats' && method === 'GET') {
             need(a, 'chat.reply');
             const threads = db.prepare(`
-        SELECT u.id, u.name, u.phone, u.avatar, u.role, u.chat_status AS status, u.muted,
+        SELECT u.id, u.name, u.phone, u.email, u.avatar, u.role, u.chat_status AS status, u.muted,
           (SELECT body FROM messages m WHERE m.user_id = u.id AND m.channel = 'admin' ORDER BY m.id DESC LIMIT 1) AS last,
           (SELECT sender FROM messages m WHERE m.user_id = u.id AND m.channel = 'admin' ORDER BY m.id DESC LIMIT 1) AS lastSender,
           (SELECT created FROM messages m WHERE m.user_id = u.id AND m.channel = 'admin' ORDER BY m.id DESC LIMIT 1) AS lastAt,
           (SELECT COUNT(*) FROM messages m WHERE m.user_id = u.id AND m.channel = 'admin' AND m.sender = 'customer' AND m.read = 0) AS unread
-        FROM users u WHERE EXISTS (SELECT 1 FROM messages m WHERE m.user_id = u.id AND m.channel = 'admin')
-        ORDER BY lastAt DESC`).all().map(t => ({...t, avatar: t.avatar || '', muted: !!t.muted }));
+        FROM users u WHERE u.id != ?
+        ORDER BY COALESCE(lastAt, 0) DESC, u.id DESC`).all(uid).map(t => ({...t, email: t.email || (t.phone && t.phone.includes('@') ? t.phone : ''), avatar: t.avatar || '', muted: !!t.muted }));
             return json({ threads, unread: threads.reduce((s, t) => s + (t.status === 'resolved' ? 0 : t.unread), 0) });
         }
         if (p === '/api/chats/broadcast' && method === 'POST') { // one message to many people

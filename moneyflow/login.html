@@ -1,179 +1,576 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 40 40%27%3E%3Crect width=%2740%27 height=%2740%27 rx=%279%27 fill=%27%236d4aff%27/%3E%3Cpath d=%27M9 30V11l9 12V10l13 20%27 fill=%27none%27 stroke=%27white%27 stroke-width=%274%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
-<title>MoneyFlow – Sign in</title>
-<style>
-  :root { --bg: #f5f6fb; --card: #fff; --text: #151a33; --muted: #6b7190; --border: #e2e5f2; --primary: #6d4aff; --primary-soft: #efeaff; --red: #dc2626; --red-soft: rgba(220,38,38,.09); --green: #16a34a; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0b0d22; --card: #14173a; --text: #eef0ff; --muted: #9298c0; --border: #2a2f5c; --primary-soft: #261f5c; --red: #f87171; --red-soft: rgba(248,113,113,.12); --green: #4ade80; } }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: grid; grid-template-columns: 1.05fr 1fr; font-size: 14px; }
-  .brand { background: linear-gradient(135deg, #15803d, #0d9488 50%, #6d4aff); color: #fff; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
-  .brand::before, .brand::after { content: ""; position: absolute; border-radius: 50%; background: rgba(255,255,255,.08); }
-  .brand::before { width: 420px; height: 420px; right: -140px; top: -120px; }
-  .brand::after { width: 300px; height: 300px; left: -100px; bottom: -90px; }
-  .logo { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 800; position: relative; z-index: 1; }
-  .logo svg { width: 42px; height: 42px; }
-  .brand h2 { font-size: 34px; line-height: 1.2; max-width: 420px; position: relative; z-index: 1; }
-  .brand p { opacity: .85; margin-top: 14px; max-width: 420px; line-height: 1.6; position: relative; z-index: 1; }
-  .brand ul { list-style: none; margin-top: 26px; display: grid; gap: 12px; position: relative; z-index: 1; }
-  .brand li { display: flex; gap: 10px; align-items: center; }
-  .brand li span { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,.2); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
-  .brand small { opacity: .7; position: relative; z-index: 1; }
-  main { display: flex; align-items: center; justify-content: center; padding: 28px; }
-  .card { width: 100%; max-width: 410px; }
-  h1 { font-size: 26px; margin-bottom: 6px; }
-  .sub { color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
-  .tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--primary-soft); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
-  .tabs button { padding: 10px; border-radius: 9px; font: inherit; font-weight: 700; color: var(--muted); background: none; border: 0; cursor: pointer; }
-  .tabs button.on { background: var(--card); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-  label.row { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 14px; }
-  .field { position: relative; margin-top: 6px; }
-  input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--text); font: inherit; font-size: 15px; }
-  input:focus { outline: 2px solid rgba(109,74,255,.35); border-color: var(--primary); }
-  input.bad { border-color: var(--red); background: var(--red-soft); }
-  input.bad:focus { outline-color: rgba(220,38,38,.35); }
-  input.good { border-color: var(--green); }
-  .field button { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 6px 8px; border-radius: 8px; }
-  .field button:hover { color: var(--primary); background: var(--primary-soft); }
-  .hint { font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 5px; }
-  .ferr { color: var(--red); font-weight: 600; font-size: 12.5px; margin-top: 6px; display: none; line-height: 1.4; }
-  .ferr.show { display: block; }
-  .ferr::before { content: "✕ "; }
-  .submit { width: 100%; padding: 13px; border: 0; border-radius: 12px; background: linear-gradient(90deg, #6d4aff, #8466ff); color: #fff; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 8px 18px rgba(109,74,255,.3); margin-top: 4px; }
-  .submit:hover { filter: brightness(1.07); }
-  .submit:disabled { opacity: .6; cursor: wait; }
-  .err { background: var(--red-soft); color: var(--red); border: 1px solid rgba(220,38,38,.25); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px; line-height: 1.5; display: none; }
-  .err.show { display: block; }
-  .err b { display: block; margin-bottom: 4px; }
-  .err ul { margin: 4px 0 0 18px; }
-  .err code { background: rgba(0,0,0,.08); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
-  .okbox { background: rgba(22,163,74,.1); color: var(--green); border: 1px solid rgba(22,163,74,.3); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px; line-height: 1.5; display: none; }
-  .okbox.show { display: block; }
-  .note { background: var(--primary-soft); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; line-height: 1.5; font-size: 13px; }
-  .foot { text-align: center; color: var(--muted); margin-top: 18px; font-size: 13px; }
-  .foot a { color: var(--primary); font-weight: 700; cursor: pointer; text-decoration: none; }
-  .hidden { display: none !important; }
-  .mlogo { display: none; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; margin-bottom: 22px; }
-  .mlogo svg { width: 34px; height: 34px; }
-  @media (max-width: 860px) { body { grid-template-columns: 1fr; } .brand { display: none; } .mlogo { display: flex; } }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 40 40%27%3E%3Crect width=%2740%27 height=%2740%27 rx=%279%27 fill=%27%236d4aff%27/%3E%3Cpath d=%27M9 30V11l9 12V10l13 20%27 fill=%27none%27 stroke=%27white%27 stroke-width=%274%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+    <title>MoneyFlow – Sign in</title>
+    <style>
+         :root {
+            --bg: #f5f6fb;
+            --card: #fff;
+            --text: #151a33;
+            --muted: #6b7190;
+            --border: #e2e5f2;
+            --primary: #6d4aff;
+            --primary-soft: #efeaff;
+            --red: #dc2626;
+            --red-soft: rgba(220, 38, 38, .09);
+            --green: #16a34a;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+             :root {
+                --bg: #0b0d22;
+                --card: #14173a;
+                --text: #eef0ff;
+                --muted: #9298c0;
+                --border: #2a2f5c;
+                --primary-soft: #261f5c;
+                --red: #f87171;
+                --red-soft: rgba(248, 113, 113, .12);
+                --green: #4ade80;
+            }
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+            background: radial-gradient(ellipse at 50% 0, rgba(109, 74, 255, .12), transparent 55%), var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            font-size: 14px;
+        }
+        
+        .brand {
+            display: none;
+        }
+        
+        .brand::before,
+        .brand::after {
+            content: "";
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .08);
+        }
+        
+        .brand::before {
+            width: 420px;
+            height: 420px;
+            right: -140px;
+            top: -120px;
+        }
+        
+        .brand::after {
+            width: 300px;
+            height: 300px;
+            left: -100px;
+            bottom: -90px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 26px;
+            font-weight: 800;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .logo svg {
+            width: 42px;
+            height: 42px;
+        }
+        
+        .brand h2 {
+            font-size: 34px;
+            line-height: 1.2;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .brand p {
+            opacity: .85;
+            margin-top: 14px;
+            max-width: 420px;
+            line-height: 1.6;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .brand ul {
+            list-style: none;
+            margin-top: 26px;
+            display: grid;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .brand li {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .brand li span {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .2);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+        
+        .brand small {
+            opacity: .7;
+            position: relative;
+            z-index: 1;
+        }
+        
+        main {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 20px;
+            min-height: 100vh;
+            width: 100%;
+        }
+        
+        .card {
+            width: 100%;
+            max-width: 440px;
+            padding: 34px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 24px 70px rgba(30, 30, 80, .12);
+        }
+        
+        h1 {
+            font-size: 26px;
+            margin-bottom: 6px;
+        }
+        
+        .sub {
+            color: var(--muted);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        
+        .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: var(--primary-soft);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .tabs button {
+            padding: 10px;
+            border-radius: 9px;
+            font: inherit;
+            font-weight: 700;
+            color: var(--muted);
+            background: none;
+            border: 0;
+            cursor: pointer;
+        }
+        
+        .tabs button.on {
+            background: var(--card);
+            color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+        }
+        
+        label.row {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+        
+        .field {
+            position: relative;
+            margin-top: 6px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--card);
+            color: var(--text);
+            font: inherit;
+            font-size: 15px;
+        }
+        
+        input:focus {
+            outline: 2px solid rgba(109, 74, 255, .35);
+            border-color: var(--primary);
+        }
+        
+        input.bad {
+            border-color: var(--red);
+            background: var(--red-soft);
+        }
+        
+        input.bad:focus {
+            outline-color: rgba(220, 38, 38, .35);
+        }
+        
+        input.good {
+            border-color: var(--green);
+        }
+        
+        .field button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: 0;
+            color: var(--muted);
+            cursor: pointer;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 8px;
+            border-radius: 8px;
+        }
+        
+        .field button:hover {
+            color: var(--primary);
+            background: var(--primary-soft);
+        }
+        
+        .hint {
+            font-weight: 400;
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        .ferr {
+            color: var(--red);
+            font-weight: 600;
+            font-size: 12.5px;
+            margin-top: 6px;
+            display: none;
+            line-height: 1.4;
+        }
+        
+        .ferr.show {
+            display: block;
+        }
+        
+        .ferr::before {
+            content: "✕ ";
+        }
+        
+        .submit {
+            width: 100%;
+            padding: 13px;
+            border: 0;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #6d4aff, #8466ff);
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(109, 74, 255, .3);
+            margin-top: 4px;
+        }
+        
+        .submit:hover {
+            filter: brightness(1.07);
+        }
+        
+        .submit:disabled {
+            opacity: .6;
+            cursor: wait;
+        }
+        
+        .err {
+            background: var(--red-soft);
+            color: var(--red);
+            border: 1px solid rgba(220, 38, 38, .25);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.5;
+            display: none;
+        }
+        
+        .err.show {
+            display: block;
+        }
+        
+        .err b {
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .err ul {
+            margin: 4px 0 0 18px;
+        }
+        
+        .err code {
+            background: rgba(0, 0, 0, .08);
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-size: 12.5px;
+            word-break: break-all;
+        }
+        
+        .okbox {
+            background: rgba(22, 163, 74, .1);
+            color: var(--green);
+            border: 1px solid rgba(22, 163, 74, .3);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.5;
+            display: none;
+        }
+        
+        .okbox.show {
+            display: block;
+        }
+        
+        .note {
+            background: var(--primary-soft);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+        
+        .foot {
+            text-align: center;
+            color: var(--muted);
+            margin-top: 18px;
+            font-size: 13px;
+        }
+        
+        .foot a {
+            color: var(--primary);
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .password-help {
+            display: flex;
+            justify-content: flex-end;
+            margin: -5px 0 14px;
+        }
+        
+        .password-help button {
+            color: var(--primary);
+            background: transparent;
+            border: 0;
+            padding: 2px 0;
+            font: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        
+        .password-help button:hover {
+            text-decoration: underline;
+        }
+        
+        .recovery-note {
+            color: var(--muted);
+            background: var(--primary-soft);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin: -4px 0 14px;
+            font-size: 12.5px;
+            line-height: 1.55;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .mlogo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 22px;
+        }
+        
+        .mlogo svg {
+            width: 34px;
+            height: 34px;
+        }
+        
+        @media (max-width: 480px) {
+            main {
+                padding: 18px 14px;
+            }
+            .card {
+                padding: 26px 22px;
+                border-radius: 20px;
+            }
+        }
+    </style>
 </head>
+
 <body>
-<section class="brand">
-  <div class="logo">
-    <svg viewBox="0 0 40 40"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#bfe9ff"/></linearGradient></defs><path d="M6 32 L6 10 L18 24 L18 8 L34 30" fill="none" stroke="url(#lg)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    MoneyFlow
-  </div>
-  <div>
-    <h2>Track. Save. Grow.</h2>
-    <p>One place for the store's money, and one friendly page for customers to get help.</p>
-    <ul>
-      <li><span>✓</span> Sign in with just your phone number</li>
-      <li><span>✓</span> Staff see the dashboard, customers get their own page</li>
-      <li><span>✓</span> Chat with the AI assistant or message the admin</li>
-    </ul>
-  </div>
-  <small>Your data stays on the computer running this server.</small>
-</section>
+    <section class="brand">
+        <div class="logo">
+            <svg viewBox="0 0 40 40"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#bfe9ff"/></linearGradient></defs><path d="M6 32 L6 10 L18 24 L18 8 L34 30" fill="none" stroke="url(#lg)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>            MoneyFlow
+        </div>
+        <div>
+            <h2>Track. Save. Grow.</h2>
+            <p>One place for the store's money, and one friendly page for customers to get help.</p>
+            <ul>
+                <li><span>✓</span> Sign in with your Gmail or email address</li>
+                <li><span>✓</span> Staff see the dashboard, customers get their own page</li>
+                <li><span>✓</span> Chat with the AI assistant or message the admin</li>
+            </ul>
+        </div>
+        <small>Your data stays on the computer running this server.</small>
+    </section>
 
-<main>
-  <div class="card">
-    <div class="mlogo">
-      <svg viewBox="0 0 40 40"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#4fc3ff"/></linearGradient></defs><path d="M6 32 L6 10 L18 24 L18 8 L34 30" fill="none" stroke="url(#lg2)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      MoneyFlow
-    </div>
-    <h1 id="title">Welcome back</h1>
-    <p class="sub" id="sub">Sign in with your phone number and password.</p>
+    <main>
+        <div class="card">
+            <div class="mlogo">
+                <svg viewBox="0 0 40 40"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#4fc3ff"/></linearGradient></defs><path d="M6 32 L6 10 L18 24 L18 8 L34 30" fill="none" stroke="url(#lg2)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>                MoneyFlow
+            </div>
+            <h1 id="title">Welcome back</h1>
+            <p class="sub" id="sub">Sign in with your Gmail and password.</p>
 
-    <div class="note hidden" id="firstNote"><b>Welcome! You are the first one here.</b><br>The account you create now becomes the <b>admin</b>. Everyone who registers after you starts as a customer, and you can change their role later. <span id="setupKeyHint" class="hidden">Enter the admin setup key provided by the person who deployed this app.</span></div>
+            <div class="note hidden" id="firstNote"><b>Welcome! You are the first one here.</b><br>The account you create now becomes the <b>admin</b>. Everyone who registers after you starts as a customer, and you can change their role later. <span id="setupKeyHint" class="hidden">Enter the admin setup key provided by the person who deployed this app.</span></div>
 
-    <div class="note hidden" id="rulesNote"></div>
+            <div class="note hidden" id="rulesNote"></div>
 
-    <div class="tabs" role="tablist" id="tabs">
-      <button type="button" role="tab" data-mode="login" class="on">Sign in</button>
-      <button type="button" role="tab" data-mode="register">Register</button>
-    </div>
+            <div class="tabs" role="tablist" id="tabs">
+                <button type="button" role="tab" data-mode="login" class="on">Sign in</button>
+                <button type="button" role="tab" data-mode="register">Register</button>
+            </div>
 
-    <div class="err" id="err" role="alert" aria-live="assertive"></div>
-    <div class="okbox" id="ok" role="status" aria-live="polite"></div>
+            <div class="err" id="err" role="alert" aria-live="assertive"></div>
+            <div class="okbox" id="ok" role="status" aria-live="polite"></div>
 
-    <form id="form" novalidate>
-      <label class="row hidden" id="nameWrap">Your name
+            <form id="form" novalidate>
+                <label class="row hidden" id="nameWrap">Your name
         <div class="field"><input id="name" autocomplete="name" maxlength="60" placeholder="e.g. Alex Morgan" aria-describedby="e-name"></div>
         <div class="ferr" id="e-name"></div>
       </label>
-      <label class="row">Phone number
-        <div class="field"><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 555 010 0100" aria-describedby="e-phone"></div>
+                <label class="row">Gmail / Email
+        <div class="field"><input id="phone" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com" aria-describedby="e-phone"></div>
         <div class="ferr" id="e-phone"></div>
-        <div class="hint" id="h-phone">Include your country code if you can, for example +84 or +1.</div>
+        <div class="hint" id="h-phone">Enter your Gmail or email address (e.g. name@gmail.com).</div>
       </label>
-      <label class="row">Password
+                <label class="row">Password
         <div class="field"><input id="password" type="password" autocomplete="current-password" placeholder="At least 8 characters" aria-describedby="e-password"><button type="button" id="peek" aria-label="Show password">Show</button></div>
         <div class="ferr" id="e-password"></div>
       </label>
-      <label class="row hidden" id="confirmWrap">Confirm password
+                <div class="password-help" id="forgotWrap"><button type="button" id="forgot" aria-expanded="false" aria-controls="recoveryNote">Forgot password?</button></div>
+                <div class="recovery-note hidden" id="recoveryNote" role="status">For your security, MoneyFlow does not send password-reset links by email or text. Ask your store administrator to reset your password from <b>Users</b> in the dashboard. They can select your account and choose <b>Reset password</b>.</div>
+                <label class="row hidden" id="confirmWrap">Confirm password
         <div class="field"><input id="confirm" type="password" autocomplete="new-password" placeholder="Type it again" aria-describedby="e-confirm"></div>
         <div class="ferr" id="e-confirm"></div>
       </label>
-      <label class="row hidden" id="adminSetupWrap">Admin setup key
+                <label class="row hidden" id="adminSetupWrap">Admin setup key
         <div class="field"><input id="adminSetupKey" type="password" autocomplete="off" placeholder="Provided by the app owner"></div>
         <div class="hint">Only needed to create the first admin account.</div>
       </label>
-      <button class="submit" id="go" type="submit">Sign in</button>
-    </form>
-    <p class="foot" id="foot">New here? <a id="swap">Create an account</a></p>
-  </div>
-</main>
+                <button class="submit" id="go" type="submit">Sign in</button>
+            </form>
+            <p class="foot" id="foot">New here? <a id="swap">Create an account</a></p>
+        </div>
+    </main>
 
-<script>
-const $ = id => document.getElementById(id);
-const FIELDS = ['name', 'phone', 'password', 'confirm'];
-const LABEL = { name: 'Name', phone: 'Phone number', password: 'Password', confirm: 'Confirm password' };
-let mode = 'login', busy = false;
-const rules = { hasUsers: false, open: true, approval: false, setupKeyRequired: false }; // what the admin allows, learned from the server
+    <script>
+        const $ = id => document.getElementById(id);
+        const FIELDS = ['name', 'phone', 'password', 'confirm'];
+        const LABEL = {
+            name: 'Name',
+            phone: 'Gmail / Email',
+            password: 'Password',
+            confirm: 'Confirm password'
+        };
+        let mode = 'login',
+            busy = false;
+        const rules = {
+            hasUsers: false,
+            open: true,
+            approval: false,
+            setupKeyRequired: false
+        }; // what the admin allows, learned from the server
 
-/* ---------- checking what was typed ---------- */
-function checkPhone(raw) {
-  const v = raw.trim();
-  if (!v) return 'Enter your phone number.';
-  const bad = [...new Set(v.replace(/[\d\s\-().+]/g, '').split(''))];
-  if (bad.length) return `Phone numbers can only contain digits, spaces, dashes, brackets and a + at the start. Remove: ${bad.map(c => '“' + c + '”').join(' ')}`;
-  const clean = v.replace(/[\s\-().]/g, '');
-  if (/\+/.test(clean.slice(1)) || (clean.includes('+') && clean[0] !== '+')) return 'The + sign can only be at the very start of the number.';
-  const digits = clean.replace(/\D/g, '').length;
-  if (digits < 8) return `Too short: you typed ${digits} digit${digits === 1 ? '' : 's'}, a phone number needs at least 8.`;
-  if (digits > 15) return `Too long: you typed ${digits} digits, a phone number has at most 15.`;
-  return '';
-}
-const CHECKS = {
-  name: () => ($('name').value.trim() ? '' : 'Enter your name.'),
-  phone: () => checkPhone($('phone').value),
-  password: () => {
-    const p = $('password').value;
-    if (!p) return mode === 'login' ? 'Enter your password.' : 'Choose a password.';
-    if (mode === 'register' && p.length < 8) return `Too short: ${p.length} character${p.length === 1 ? '' : 's'} so far, you need at least 8.`;
-    if (p.length > 128) return 'Too long: 128 characters at most.';
-    return '';
-  },
-  confirm: () => (mode === 'register' && $('confirm').value !== $('password').value ? 'The two passwords are not the same. Check both lines.' : ''),
-};
-const active = () => (mode === 'register' ? FIELDS : ['phone', 'password']);
+        /* ---------- checking what was typed ---------- */
+        function checkLoginId(raw) {
+            const v = raw.trim();
+            if (!v) return 'Enter your Gmail or email address.';
+            if (v.includes('@')) {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Please enter a valid email format (e.g. name@gmail.com).';
+                return '';
+            }
+            const clean = v.replace(/[\s\-().]/g, '');
+            if (/^\+?\d{8,15}$/.test(clean)) return '';
+            return 'Please enter a valid Gmail address (e.g. name@gmail.com).';
+        }
+        const CHECKS = {
+            name: () => ($('name').value.trim() ? '' : 'Enter your name.'),
+            phone: () => checkLoginId($('phone').value),
+            password: () => {
+                const p = $('password').value;
+                if (!p) return mode === 'login' ? 'Enter your password.' : 'Choose a password.';
+                if (mode === 'register' && p.length < 8) return `Too short: ${p.length} character${p.length === 1 ? '' : 's'} so far, you need at least 8.`;
+                if (p.length > 128) return 'Too long: 128 characters at most.';
+                return '';
+            },
+            confirm: () => (mode === 'register' && $('confirm').value !== $('password').value ? 'The two passwords are not the same. Check both lines.' : ''),
+        };
+        const active = () => (mode === 'register' ? FIELDS : ['phone', 'password']);
 
-/* ---------- showing problems ---------- */
-function mark(field, msg) {
-  const el = $(field), box = $('e-' + field);
-  if (!el || !box) return;
-  el.classList.toggle('bad', !!msg); el.classList.toggle('good', !msg && !!el.value && field !== 'password');
-  el.setAttribute('aria-invalid', msg ? 'true' : 'false');
-  box.textContent = msg; box.classList.toggle('show', !!msg);
-}
-function clearMarks() { FIELDS.forEach(f => mark(f, '')); $('err').classList.remove('show'); $('ok').classList.remove('show'); }
-function summary(title, problems, extraHtml = '') {
-  const e = $('err');
-  e.innerHTML = `<b>${title}</b>` + (problems.length ? `<ul>${problems.map(p => `<li>${p}</li>`).join('')}</ul>` : '') + extraHtml;
+        /* ---------- showing problems ---------- */
+        function mark(field, msg) {
+            const el = $(field),
+                box = $('e-' + field);
+            if (!el || !box) return;
+            el.classList.toggle('bad', !!msg);
+            el.classList.toggle('good', !msg && !!el.value && field !== 'password');
+            el.setAttribute('aria-invalid', msg ? 'true' : 'false');
+            box.textContent = msg;
+            box.classList.toggle('show', !!msg);
+        }
+
+        function clearMarks() {
+            FIELDS.forEach(f => mark(f, ''));
+            $('err').classList.remove('show');
+            $('ok').classList.remove('show');
+        }
+
+        function summary(title, problems, extraHtml = '') {
+            const e = $('err');
+            e.innerHTML = `<b>${title}</b>` + (problems.length ? `<ul>${problems.map(p => `<li>${p}</li>`).join('')}</ul>` : '') + extraHtml;
   e.classList.add('show');
 }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -203,9 +600,10 @@ function setMode(m) {
   const reg = m === 'register';
   document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.mode === m); b.setAttribute('aria-selected', b.dataset.mode === m); });
   $('nameWrap').classList.toggle('hidden', !reg); $('confirmWrap').classList.toggle('hidden', !reg);
+  $('forgotWrap').classList.toggle('hidden', reg); $('recoveryNote').classList.add('hidden'); $('forgot').setAttribute('aria-expanded', 'false');
   $('password').autocomplete = reg ? 'new-password' : 'current-password';
   $('title').textContent = reg ? 'Create your account' : 'Welcome back';
-  $('sub').textContent = reg ? 'Register with your phone number to get started.' : 'Sign in with your phone number and password.';
+  $('sub').textContent = reg ? 'Register with your Gmail and password to use MoneyFlow.' : 'Sign in with your Gmail and password.';
   $('go').textContent = reg ? 'Create account' : 'Sign in';
   $('foot').innerHTML = reg ? 'Already have an account? <a id="swap">Sign in</a>' : 'New here? <a id="swap">Create an account</a>';
   $('swap').onclick = () => setMode(reg ? 'login' : 'register');
@@ -228,6 +626,11 @@ $('peek').onclick = () => {
   $('password').type = show ? 'text' : 'password'; $('confirm').type = show ? 'text' : 'password';
   $('peek').textContent = show ? 'Hide' : 'Show';
 };
+$('forgot').onclick = () => {
+  const note = $('recoveryNote'), open = note.classList.contains('hidden');
+  note.classList.toggle('hidden', !open);
+  $('forgot').setAttribute('aria-expanded', String(open));
+};
 // tell people about a mistake as soon as they leave the box, and clear it as soon as they fix it
 FIELDS.forEach(f => {
   $(f).addEventListener('blur', () => { if ($(f).value || $(f).classList.contains('bad')) mark(f, CHECKS[f]()); });
@@ -240,15 +643,16 @@ $('form').onsubmit = async e => {
   if (busy || !validate()) return;
   busy = true; $('go').disabled = true; $('go').textContent = mode === 'register' ? 'Creating…' : 'Signing in…';
   try {
-    const r = await fetch('/api/auth/' + mode, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: $('name').value.trim(), phone: $('phone').value.trim(), password: $('password').value, adminSetupKey: $('adminSetupKey').value }) });
+    const loginVal = $('phone').value.trim();
+    const r = await fetch('/api/auth/' + mode, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: $('name').value.trim(), email: loginVal, phone: loginVal, password: $('password').value, adminSetupKey: $('adminSetupKey').value }) });
     const text = await r.text();
     let j = null; try { j = JSON.parse(text); } catch (_) { /* not JSON */ }
     if (r.status === 202 && j && j.pending) { const p = $('phone').value; setMode('login'); $('phone').value = p; showOk(j.message || 'Your account was created. The admin needs to approve it before you can sign in.'); return; }
     if (r.ok && j && j.user) return location.replace('/'); // the server sends staff to the dashboard and customers to their page
     if (!j || typeof j !== 'object' || (!r.ok && !j.error)) return wrongServer(r.status);
     const f = j.field, msg = j.error || 'The server refused the request.';
-    if (f === 'login') { mark('phone', ' '); mark('password', msg); $('e-phone').classList.remove('show'); summary('Could not sign in', [esc(msg), 'Check the number and the password. Passwords are case-sensitive.']); $('password').select(); }
-    else if (FIELDS.includes(f)) { mark(f, msg); summary('Please fix this', [`<b style="display:inline">${LABEL[f]}:</b> ${esc(msg)}`]); $(f).focus(); }
+    if (f === 'login') { mark('phone', ' '); mark('password', msg); $('e-phone').classList.remove('show'); summary('Could not sign in', [esc(msg), 'Check your Gmail/email and password. Passwords are case-sensitive.']); $('password').select(); }
+    else if (f === 'email' || f === 'phone' || FIELDS.includes(f)) { mark('phone', msg); summary('Please fix this', [`<b style="display:inline">Gmail / Email:</b> ${esc(msg)}`]); $('phone').focus(); }
     else if (f === 'adminSetupKey') { summary('Please check the admin setup key', [esc(msg)]); $('adminSetupKey').focus(); }
     else summary(r.status === 429 ? 'Too many attempts' : 'Could not continue', [esc(msg)]);
   } catch (err) {
@@ -269,6 +673,7 @@ fetch('/api/auth/status').then(async r => {
 }).catch(() => summary(`Cannot reach the server at ${esc(location.origin)}`, ['Your browser could not connect.'], START));
 setMode(location.hash === '#register' ? 'register' : 'login');
 $('phone').focus();
-</script>
+    </script>
 </body>
+
 </html>
