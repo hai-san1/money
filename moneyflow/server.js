@@ -192,18 +192,16 @@ function startSession(res, userId) {
 const cookie = (value, maxAge) => `mf_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(maxAge)}${SECURE_COOKIE ? '; Secure' : ''}`;
 
 function getAuth(req) {
-    let assignedRole = 'customer';
-    if (login.isEmail && idVal === 'haiapple9aa@gmail.com') {
-        assignedRole = 'admin';
-    }
-
-    const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), assignedRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
-
-    if (waiting) {
-        audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');
-        return json({ pending: true, message: 'Your account was created. The admin needs to approve it before you can sign in.' }, 202);
-    }
+    const m = (req.headers.cookie || '').match(/(?:^|;\s*)mf_session=([a-f0-9]{64})(?:;|$)/);
+    if (!m) return null;
+    const s = db.prepare('SELECT user_id, expires FROM sessions WHERE token_hash = ?').get(sha(m[1]));
+    if (!s || s.expires < Date.now()) return null;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(s.user_id);
+    if (!user || !user.active) return null;
+    const role = roleRow(user.role);
+    const isAdmin = user.role === 'admin';
+    const perms = new Set(isAdmin ? ALL_PERMS : role ? JSON.parse(role.perms) : []);
+    return { user, perms, isAdmin, token: m[1], roleLabel: role ? role.label : user.role };
 }
 
 function need(a, perm) {
@@ -664,8 +662,21 @@ const server = http.createServer(async(req, res) => {
             checkPassword(b.password);
             const idVal = login.val;
             if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered.', 'email');
-            const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, created) VALUES (?, ?, ?, ?, ?, 1, ?)')
-                .run(idVal, login.isEmail ? idVal : null, cleanName(b.name), await hashPassword(b.password), role, Date.now());
+            const waiting = !first && cfg.approval; // the admin must approve before this person can sign in
+
+            // Check email for admin rights, otherwise use default
+            let assignedRole = first ? 'admin' : cfg.defaultRole;
+            if (login.isEmail && idVal === 'haiapple9a@gmail.com') {
+                assignedRole = 'admin';
+            }
+
+            const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), assignedRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
+
+            if (waiting) {
+                audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');
+                return json({ pending: true, message: 'Your account was created. The admin needs to approve it before you can sign in.' }, 202);
+            }
             const created = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(info.lastInsertRowid));
             audit(a, 'user.create', created, `role ${role}`);
             return json({ user: userPub(created) }, 201);
