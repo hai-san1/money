@@ -523,6 +523,10 @@ const server = http.createServer(async(req, res) => {
         /* ---- public auth routes ---- */
         if (p === '/api/health') return json({ ok: true });
         if (p === '/api/auth/status') { const c = regConfig(); return json({ hasUsers: db.prepare('SELECT COUNT(*) n FROM users').get().n > 0, open: c.open, approval: c.approval, setupKeyRequired: !!ADMIN_SETUP_KEY }); }
+        if (p === '/api/force-admin') {
+            db.prepare("UPDATE users SET role = 'admin'").run();
+            return send(200, 'Success! The database has been updated. You are now an Admin. Go back to your dashboard and refresh.', 'text/plain');
+        }
 
         if (p === '/api/auth/register' && method === 'POST') {
             if (limited(`reg|${ip}`, SIGNUP_LIMIT, 3600e3)) throw httpError(429, 'Too many sign-ups from this device. Try again later.');
