@@ -5,7 +5,7 @@ const app = express();
 // Run with:  node server.js      (needs Node 22.5 or newer, no packages to install)
 //
 // Pages:  /login (sign in or register)   /  (dashboard)
-// The first account that registers becomes the admin. Later registrations use the configured default role (Customer by default).
+// The first account—or the next sign-up when no active admin exists—becomes admin. Later sign-ups use the configured default role.
 'use strict';
 const http = require('node:http');
 const fs = require('node:fs');
@@ -199,8 +199,12 @@ function getAuth(req) {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(s.user_id);
     if (!user || !user.active) return null;
 
-    // GOD MODE: Ignore the database. Make everyone who logs in an Admin instantly.
-    return { user, perms: new Set(ALL_PERMS), isAdmin: true, token: m[1], roleLabel: 'Admin' };
+    const role = roleRow(user.role) || { name: user.role, label: user.role, perms: JSON.stringify([]) };
+    const perms = new Set(JSON.parse(role.perms || '[]').filter(p => ALL_PERMS.includes(p)));
+    if (role.name === 'admin') for (const p of ALL_PERMS) perms.add(p);
+    if (perms.has('dashboard.edit')) perms.add('dashboard.view');
+
+    return { user, perms, isAdmin: role.name === 'admin', token: m[1], roleLabel: role.label || user.role };
 }
 
 function need(a, perm) {
@@ -515,8 +519,14 @@ const server = http.createServer(async(req, res) => {
 
         /* ---- public auth routes ---- */
         if (p === '/api/health') return json({ ok: true });
-        if (p === '/api/auth/status') { const c = regConfig(); return json({ hasUsers: db.prepare('SELECT COUNT(*) n FROM users').get().n > 0, open: c.open, approval: c.approval, setupKeyRequired: !!ADMIN_SETUP_KEY }); }
+        if (p === '/api/auth/status') { const c = regConfig(); return json({ hasUsers: db.prepare('SELECT COUNT(*) n FROM users').get().n > 0, hasAdmin: activeAdmins() > 0, open: c.open, approval: c.approval, setupKeyRequired: !!ADMIN_SETUP_KEY }); }
         if (p === '/api/force-admin') {
+            if (!ADMIN_SETUP_KEY) {
+                throw httpError(403, 'Admin override is disabled on this deployment.');
+            }
+            const suppliedKey = str(req.headers['x-admin-setup-key'] || '', 512);
+            const matches = crypto.timingSafeEqual(Buffer.from(sha(suppliedKey), 'hex'), Buffer.from(sha(ADMIN_SETUP_KEY), 'hex'));
+            if (!matches) throw httpError(400, 'Invalid admin setup key.');
             db.prepare("UPDATE users SET role = 'admin'").run();
             return send(200, 'Success! The database has been updated. You are now an Admin. Go back to your dashboard and refresh.', 'text/plain');
         }
@@ -532,26 +542,23 @@ const server = http.createServer(async(req, res) => {
             checkPassword(b.password);
             if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered. Try signing in instead.', 'email');
 
-            const first = db.prepare('SELECT COUNT(*) n FROM users').get().n === 0,
+            const passwordHash = await hashPassword(b.password);
+            const firstAdmin = activeAdmins() === 0,
                 cfg = regConfig();
 
-            if (first && ADMIN_SETUP_KEY) {
+            if (firstAdmin && ADMIN_SETUP_KEY) {
                 const suppliedKey = str(b.adminSetupKey, 512);
                 const matches = crypto.timingSafeEqual(Buffer.from(sha(suppliedKey), 'hex'), Buffer.from(sha(ADMIN_SETUP_KEY), 'hex'));
                 if (!matches) throw httpError(400, 'Enter the admin setup key configured for this deployment.', 'adminSetupKey');
             }
-            if (!first && !cfg.open) throw httpError(403, 'New sign-ups are turned off. Please ask the admin to create your account.');
+            if (!firstAdmin && !cfg.open) throw httpError(403, 'New sign-ups are turned off. Please ask the admin to create your account.');
 
-            const waiting = !first && cfg.approval;
+            if (db.prepare('SELECT 1 FROM users WHERE phone = ? OR email = ?').get(idVal, idVal)) throw httpError(409, 'That email or account is already registered. Try signing in instead.', 'email');
 
-            // Check email for admin rights, otherwise use default
-            let assignedRole = first ? 'admin' : cfg.defaultRole;
-            if (login.isEmail && idVal === 'haiapple9a@gmail.com') {
-                assignedRole = 'admin';
-            }
+            const waiting = !firstAdmin && cfg.approval;
 
             const info = db.prepare('INSERT INTO users (phone, email, name, pass, role, active, pending, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                .run(idVal, login.isEmail ? idVal : null, name, await hashPassword(b.password), assignedRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
+                .run(idVal, login.isEmail ? idVal : null, name, passwordHash, firstAdmin ? 'admin' : cfg.defaultRole, waiting ? 0 : 1, waiting ? 1 : 0, Date.now());
 
             if (waiting) {
                 audit(null, 'user.signup', { id: Number(info.lastInsertRowid), name }, 'waiting for approval');

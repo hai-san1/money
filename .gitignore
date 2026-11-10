@@ -1,3 +1,7 @@
 moneyflow/moneyflow.db
 moneyflow/moneyflow.db-shm
 moneyflow/moneyflow.db-wal
+*.db
+*.db-*
+*.bak
+moneyflow/node_modules/

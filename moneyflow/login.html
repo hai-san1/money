@@ -519,6 +519,7 @@
             busy = false;
         const rules = {
             hasUsers: false,
+            hasAdmin: false,
             open: true,
             approval: false,
             setupKeyRequired: false
@@ -595,7 +596,7 @@ function validate() {
 
 /* ---------- mode switch ---------- */
 function setMode(m) {
-  if (m === 'register' && rules.hasUsers && !rules.open) m = 'login'; // sign-ups are closed
+  if (m === 'register' && rules.hasAdmin && !rules.open) m = 'login'; // sign-ups are closed
   mode = m;
   const reg = m === 'register';
   document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.mode === m); b.setAttribute('aria-selected', b.dataset.mode === m); });
@@ -611,12 +612,12 @@ function setMode(m) {
   applyRules();
 }
 function applyRules() {
-  const closed = rules.hasUsers && !rules.open;
+  const closed = rules.hasAdmin && !rules.open;
   $('tabs').classList.toggle('hidden', closed); $('foot').classList.toggle('hidden', closed);
-  $('adminSetupWrap').classList.toggle('hidden', rules.hasUsers || !rules.setupKeyRequired || mode !== 'register');
+  $('adminSetupWrap').classList.toggle('hidden', rules.hasAdmin || !rules.setupKeyRequired || mode !== 'register');
   $('setupKeyHint').classList.toggle('hidden', !rules.setupKeyRequired);
   const note = closed ? '<b>New sign-ups are turned off.</b> If you need an account, ask the store admin to create one for you.'
-    : rules.approval && rules.hasUsers && mode === 'register' ? '<b>Heads up:</b> the admin has to approve new accounts before you can sign in.' : '';
+    : rules.approval && rules.hasAdmin && mode === 'register' ? '<b>Heads up:</b> the admin has to approve new accounts before you can sign in.' : '';
   $('rulesNote').innerHTML = note; $('rulesNote').classList.toggle('hidden', !note);
 }
 function showOk(msg) { const o = $('ok'); o.textContent = msg; o.classList.add('show'); }
@@ -665,10 +666,13 @@ $('form').onsubmit = async e => {
 /* ---------- on load: is this really the MoneyFlow server? ---------- */
 fetch('/api/auth/status').then(async r => {
   let s = null; try { s = await r.json(); } catch (_) { /* not JSON */ }
-  if (!r.ok || !s || typeof s.hasUsers !== 'boolean') return wrongServer(r.status);
-  Object.assign(rules, { hasUsers: s.hasUsers, open: s.open !== false, approval: !!s.approval, setupKeyRequired: !!s.setupKeyRequired });
-  if (!s.hasUsers) { $('firstNote').classList.remove('hidden'); setMode('register'); }
-  else if (!rules.open && mode === 'register') setMode('login');
+  if (!r.ok || !s || typeof s.hasUsers !== 'boolean' || typeof s.hasAdmin !== 'boolean') return wrongServer(r.status);
+  Object.assign(rules, { hasUsers: s.hasUsers, hasAdmin: s.hasAdmin, open: s.open !== false, approval: !!s.approval, setupKeyRequired: !!s.setupKeyRequired });
+  if (!s.hasAdmin) {
+    if (s.hasUsers) $('firstNote').innerHTML = '<b>Admin setup required.</b><br>No active admin account exists. The next account you create becomes the admin. <span id="setupKeyHint" class="hidden">Enter the admin setup key provided by the person who deployed this app.</span>';
+    $('firstNote').classList.remove('hidden');
+    setMode('register');
+  } else if (!rules.open && mode === 'register') setMode('login');
   applyRules();
 }).catch(() => summary(`Cannot reach the server at ${esc(location.origin)}`, ['Your browser could not connect.'], START));
 setMode(location.hash === '#register' ? 'register' : 'login');
