@@ -4117,12 +4117,19 @@ function vCategories() {
 }
 function catForm(c = {}) {
   const color = c.color || COLORS[0], icon = c.icon || 'cart';
+  const img = c.img || '';
+  const slot = () => (img ? `<img src="${img}" alt="">` : ic('image', 24));
   return `
   <label class="f">Name<input name="name" required maxlength="22" value="${esc(c.name || '')}" placeholder="e.g. Health"></label>
   <label class="f" style="margin-bottom:0">Colour</label>
   <div class="swatches">${COLORS.map(x => `<label><input type="radio" name="color" value="${x}" ${x === color ? 'checked' : ''}><span style="background:${x}"></span></label>`).join('')}</div>
   <label class="f" style="margin-bottom:0">Icon</label>
   <div class="swatches ic">${CAT_ICONS.map(x => `<label><input type="radio" name="icon" value="${x}" ${x === icon ? 'checked' : ''}><span>${ic(x, 17)}</span></label>`).join('')}</div>
+  <div class="f" style="margin-bottom:6px">Custom Icon / Image <span style="opacity:.7">(optional)</span></div>
+  <div class="bimg"><button type="button" class="img-slot logo" id="cSlot" aria-label="Choose an image">${slot()}</button>
+    <div class="t"><b>Add a custom icon</b><span>PNG, JPG, WebP</span>
+      <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn sm" id="cPick">${ic('upload', 14)} Upload</button><button type="button" class="btn sm danger" id="cClear" ${img ? '' : 'style="display:none"'}>Remove</button></div></div></div>
+  <input type="file" id="cFile" accept="image/*" hidden>
   <label class="f">Monthly budget (optional)<input name="limit" type="number" min="0" step="1" value="${c.limit || ''}" placeholder="0 = no budget"></label>`;
 }
 
@@ -4499,13 +4506,32 @@ function defaultDate() { const t = localISO(new Date()); return t >= ui.range.fr
 
 function catModal(c) {
   const editing = !!c;
+  let img = c?.img || '', imgChanged = false;
   openModal(editing ? 'Edit category' : 'New category', catForm(c || {}), d => {
     const name = d.name.trim();
     if (!name) return false;
     if (S.categories.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== c?.id)) { toast('A category with that name exists'); return false; }
     const rec = { id: c?.id || uid(), name, color: d.color, icon: d.icon, limit: Math.max(0, parseFloat(d.limit) || 0) };
+    if (imgChanged) { if (img) rec.img = img; else delete rec.img; }
     if (editing) S.categories[S.categories.findIndex(x => x.id === c.id)] = rec; else S.categories.push(rec);
     refresh(); toast(editing ? 'Category updated' : 'Category created');
+  },
+  {
+    setup: form => {
+      const slotEl = form.querySelector('#cSlot'), file = form.querySelector('#cFile'), clear = form.querySelector('#cClear');
+      const paint = () => { slotEl.innerHTML = (img ? `<img src="${img}" alt="">` : ic('image', 24)); clear.style.display = img ? '' : 'none'; };
+      const take = async f => {
+        if (!f) return;
+        try { img = await resizeImage(f, 160); imgChanged = true; paint(); }
+        catch (e) { toast(e.message); }
+      };
+      slotEl.onclick = form.querySelector('#cPick').onclick = () => file.click();
+      file.onchange = () => { take(file.files[0]); file.value = ''; };
+      clear.onclick = () => { img = ''; imgChanged = true; paint(); };
+      ['dragenter', 'dragover'].forEach(ev => slotEl.addEventListener(ev, e => { e.preventDefault(); slotEl.style.borderColor = 'var(--primary)'; }));
+      ['dragleave', 'drop'].forEach(ev => slotEl.addEventListener(ev, e => { e.preventDefault(); slotEl.style.borderColor = ''; }));
+      slotEl.addEventListener('drop', e => take(e.dataTransfer.files[0]));
+    }
   });
 }
 function budgetModal(c) {
